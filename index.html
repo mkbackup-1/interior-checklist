@@ -171,6 +171,9 @@
   .actions{display:flex; gap:10px; flex-wrap:wrap; margin-top:16px; align-items:center;}
   .savehint{margin:11px 2px 0; font-size:.8rem; color:var(--faint); line-height:1.55;}
   .savehint b{color:var(--muted);}
+  .storage-warn{margin:16px 0 0; padding:11px 14px; border-radius:10px; font-size:.86rem;
+    background:#FFF3CD; border:1px solid #EAD182; color:#7A5B00; line-height:1.5;}
+  .storage-warn b{color:#5c4400;}
   .btn{font-family:var(--mono); font-size:.72rem; letter-spacing:.06em;
     background:none; border:1px solid var(--line); color:var(--muted);
     padding:8px 15px; border-radius:999px; cursor:pointer; transition:.15s;}
@@ -518,14 +521,20 @@
 
 <script>
 (function(){
-  var KEY="reno-spec-v2";
+  var KEY="reno-spec-v3", OLDKEY="reno-spec-v2";
   var inputs=[].slice.call(document.querySelectorAll('input.val'));
   var saved={};
   try{saved=JSON.parse(localStorage.getItem(KEY)||"{}");}catch(e){}
+  // 예전 번호 기반 저장분을 질문 기준으로 1회 이관 (순서 안 바뀌었으면 복구됨)
+  if(!Object.keys(saved).length){
+    try{ var old=JSON.parse(localStorage.getItem(OLDKEY)||"{}");
+      if(Object.keys(old).length) inputs.forEach(function(inp,i){ if(old[i]) saved[qKey(inp)]=old[i]; });
+    }catch(e){}
+  }
 
-  inputs.forEach(function(inp,i){
-    inp.dataset.idx=i;
-    if(saved[i]){ inp.value=saved[i]; }
+  inputs.forEach(function(inp){
+    var k=qKey(inp);
+    if(saved[k]!=null){ inp.value=saved[k]; }
     reflect(inp);
     inp.addEventListener('input',function(){ save(); reflect(inp); updateProg(); });
   });
@@ -535,7 +544,7 @@
     if(item) item.classList.toggle('done', inp.value.trim()!=='');
   }
   function save(){
-    var o={}; inputs.forEach(function(inp,i){ var v=inp.value.trim(); if(v)o[i]=inp.value; });
+    var o={}; inputs.forEach(function(inp){ var v=inp.value.trim(); if(v) o[qKey(inp)]=inp.value; });
     try{localStorage.setItem(KEY,JSON.stringify(o));}catch(e){}
   }
   function updateProg(){
@@ -591,15 +600,17 @@
   });
 
   // ---- 파일로 저장 / 불러오기 (백업·복원) ----
-  function qText(inp){
+  function qKey(inp){
     var item=inp.closest('.item'); if(!item) return '';
     var q=item.querySelector('.q').cloneNode(true);
     var ask=q.querySelector('.ask'); if(ask) ask.remove();
-    return q.textContent.trim();
+    var qt=q.textContent.trim();
+    var card=inp.closest('section'); var h=card&&card.querySelector('h2');
+    return (h?h.textContent.trim()+' › ':'')+qt;
   }
   document.getElementById('saveFile').addEventListener('click',function(){
-    var data={_meta:{app:'reno-spec-v2', savedAt:new Date().toISOString()}, values:{}};
-    inputs.forEach(function(inp){ var v=inp.value.trim(); if(v) data.values[qText(inp)]=inp.value; });
+    var data={_meta:{app:'reno-spec-v3', savedAt:new Date().toISOString()}, values:{}};
+    inputs.forEach(function(inp){ var v=inp.value.trim(); if(v) data.values[qKey(inp)]=inp.value; });
     var blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
     var url=URL.createObjectURL(blob), a=document.createElement('a');
     a.href=url; a.download='올수리-상담시트-'+new Date().toISOString().slice(0,10)+'.json';
@@ -614,7 +625,7 @@
       try{
         var data=JSON.parse(r.result);
         var vals=(data&&data.values)?data.values:data;
-        var map={}; inputs.forEach(function(inp){ map[qText(inp)]=inp; });
+        var map={}; inputs.forEach(function(inp){ map[qKey(inp)]=inp; });
         var n=0;
         Object.keys(vals).forEach(function(k){ if(map[k]){ map[k].value=vals[k]; reflect(map[k]); n++; } });
         save(); updateProg();
@@ -624,6 +635,17 @@
     };
     r.readAsText(f);
   });
+
+  // 자동 저장이 불가능한 환경(샌드박스/시크릿) 경고
+  (function(){
+    var ok=false;
+    try{ localStorage.setItem('__t','1'); localStorage.removeItem('__t'); ok=true; }catch(e){}
+    if(!ok){
+      var w=document.createElement('div'); w.className='storage-warn';
+      w.innerHTML='⚠️ 이 화면에서는 <b>자동 저장이 안 돼요</b>(미리보기·시크릿 모드). 입력값을 지키려면 github.io 링크에서 작성하거나, 수시로 <b>‘파일로 저장’</b> 하세요.';
+      var wrap=document.querySelector('.wrap'); if(wrap) wrap.insertBefore(w, wrap.firstChild);
+    }
+  })();
 })();
 </script>
 
