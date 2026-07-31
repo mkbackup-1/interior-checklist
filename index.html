@@ -167,7 +167,9 @@
   footer{margin-top:44px; padding-top:22px; border-top:1px solid var(--line);
     font-size:.84rem; color:var(--faint);}
   footer b{color:var(--muted);}
-  .actions{display:flex; gap:10px; flex-wrap:wrap; margin-top:16px;}
+  .actions{display:flex; gap:10px; flex-wrap:wrap; margin-top:16px; align-items:center;}
+  .savehint{margin:11px 2px 0; font-size:.8rem; color:var(--faint); line-height:1.55;}
+  .savehint b{color:var(--muted);}
   .btn{font-family:var(--mono); font-size:.72rem; letter-spacing:.06em;
     background:none; border:1px solid var(--line); color:var(--muted);
     padding:8px 15px; border-radius:999px; cursor:pointer; transition:.15s;}
@@ -499,8 +501,12 @@
     <p><b>준비물 요약</b> — 평면도(위 도면 포함)·각 방 실측 치수·보유 가전 규격·예산 상한·구역별 무드보드. 상담 땐 “꼭 할 것 / 있으면 좋은 것”을 나눠 말하면 견적 조율이 쉬워집니다.</p>
     <div class="actions">
       <button class="btn primary" type="button" id="exportBtn">채운 내용 모아보기</button>
+      <button class="btn" type="button" id="saveFile">파일로 저장(백업)</button>
+      <label class="btn" for="importFile">불러오기</label>
+      <input id="importFile" type="file" accept="application/json,.json" hidden>
       <button class="btn" type="button" id="reset">전체 초기화</button>
     </div>
+    <p class="savehint">입력값은 이 브라우저에 <b>자동 저장</b>돼요(재배포해도 유지). 기기를 바꾸거나 친구와 공유할 땐 <b>파일로 저장</b> → 다른 기기에서 <b>불러오기</b> 하세요.</p>
     <div id="exportPanel">
       <textarea id="exportText" readonly></textarea>
       <p class="hint">위 내용을 전체 선택해 복사한 뒤 업체에 보내세요. (채운 항목만 모았습니다)</p>
@@ -581,6 +587,41 @@
     panel.style.display='block';
     ta.focus(); ta.select();
     try{ navigator.clipboard && navigator.clipboard.writeText(ta.value); }catch(e){}
+  });
+
+  // ---- 파일로 저장 / 불러오기 (백업·복원) ----
+  function qText(inp){
+    var item=inp.closest('.item'); if(!item) return '';
+    var q=item.querySelector('.q').cloneNode(true);
+    var ask=q.querySelector('.ask'); if(ask) ask.remove();
+    return q.textContent.trim();
+  }
+  document.getElementById('saveFile').addEventListener('click',function(){
+    var data={_meta:{app:'reno-spec-v2', savedAt:new Date().toISOString()}, values:{}};
+    inputs.forEach(function(inp){ var v=inp.value.trim(); if(v) data.values[qText(inp)]=inp.value; });
+    var blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
+    var url=URL.createObjectURL(blob), a=document.createElement('a');
+    a.href=url; a.download='올수리-상담시트-'+new Date().toISOString().slice(0,10)+'.json';
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(function(){ URL.revokeObjectURL(url); },1000);
+  });
+  var importEl=document.getElementById('importFile');
+  importEl.addEventListener('change',function(e){
+    var f=e.target.files&&e.target.files[0]; if(!f) return;
+    var r=new FileReader();
+    r.onload=function(){
+      try{
+        var data=JSON.parse(r.result);
+        var vals=(data&&data.values)?data.values:data;
+        var map={}; inputs.forEach(function(inp){ map[qText(inp)]=inp; });
+        var n=0;
+        Object.keys(vals).forEach(function(k){ if(map[k]){ map[k].value=vals[k]; reflect(map[k]); n++; } });
+        save(); updateProg();
+        alert(n+'개 항목을 불러왔어요.');
+      }catch(err){ alert('파일을 읽을 수 없어요. 올바른 저장 파일(.json)인지 확인해 주세요.'); }
+      importEl.value='';
+    };
+    r.readAsText(f);
   });
 })();
 </script>
